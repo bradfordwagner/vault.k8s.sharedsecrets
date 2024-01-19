@@ -1,0 +1,36 @@
+# https://taskfile.dev
+
+version: '3'
+
+dotenv:
+  - .env
+
+tasks:
+  clear:
+    internal: true
+    cmds: [clear]
+  clean:
+    cmds: [rm -rf .terraform* planfile terraform.tfstate* out.json jit.auto.tfvars]
+  tf_init:
+    internal: true
+    deps: [clear]
+    cmds: [terraform init]
+  tf_plan:
+    deps: [tf_init]
+    cmds:
+      - |
+        # run terraform plan
+        terraform plan -out=planfile
+  tf_apply:
+    deps: [tf_init]
+    cmds: [terraform apply "planfile"]
+  tf_destroy:
+    deps: [clear]
+    cmds:
+      - terraform destroy -auto-approve
+      - task: clean
+  default:
+    deps: [tf_plan]
+  status:
+    cmds:
+      - vault status -format=json | jq
