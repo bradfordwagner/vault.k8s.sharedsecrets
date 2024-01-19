@@ -1,0 +1,3 @@
+---
+# used to set up auth to vault
+service_account_name: vault-auth

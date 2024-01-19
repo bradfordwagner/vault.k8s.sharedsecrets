@@ -1,0 +1,10 @@
+# pulled by tf policy
+service_account_name: test-sa
+vault:
+  # pulled by tf policy
+  role: shared_role
+  address: "" # from .env
+  namespace: client
+  auth_path: kubernetes/client_cluster
+# pulled from .env
+image: ''

@@ -1,0 +1,8 @@
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultConnection
+metadata:
+  name: {{ .Release.Name }}
+spec:
+  address: {{ .Values.vault.address }}
+  # caCertSecretRef: cacert
+  skipTLSVerify: true

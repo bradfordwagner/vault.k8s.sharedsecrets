@@ -1,0 +1,44 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: gh-template-helm-chart-
+spec:
+  ttlStrategy:
+    secondsAfterCompletion: 3600 # delete workflow after 1 hour
+  entrypoint: main
+  arguments:
+    parameters:
+    - name: git_ref_type
+      value: branches
+    - name: git_version
+      value: main
+  templates:
+  - name: main
+    inputs:
+      parameters:
+      - name: git_ref_type
+      - name: git_version
+    dag:
+      tasks:
+      - name: helm
+        arguments:
+          parameters:
+          - name: git_ref_type
+            value: "{{ inputs.parameters.git_ref_type }}"
+          - name: git_repo
+            value: https://github.com/bradfordwagner/gh-template-chart.git
+          - name: git_version
+            value: "{{ inputs.parameters.git_version }}"
+          - name: helm_image
+            value: quay.io/bradfordwagner/helm:1.1.1-debian_bullseye
+          - name: helm_repo_add
+            value: "{{ item.helm_repo_add }}"
+          - name: csi_class
+            value: acr-prod
+            # value: acr-sandbox
+        templateRef:
+          name: flavor-helm-template
+          template: main
+        withItems:
+          - helm_repo_add: []
+

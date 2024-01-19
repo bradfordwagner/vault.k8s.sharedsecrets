@@ -22,8 +22,11 @@ tasks:
         # run terraform plan
         terraform plan -out=planfile
   tf_apply:
-    deps: [tf_init]
-    cmds: [terraform apply "planfile"]
+    cmds:
+      - task: tf_plan
+      - terraform apply "planfile"
+      # sneak this in to allow secrets sharing
+      - vault write sys/config/group-policy-application group_policy_application_mode=any
   tf_destroy:
     deps: [clear]
     cmds:
@@ -34,3 +37,62 @@ tasks:
   status:
     cmds:
       - vault status -format=json | jq
+  auth_apply:
+    cmds:
+      - |
+        export namespace=${TF_VAR_client_test_kubernetes_namespace}
+        export KUBECONFIG=${CLIENT_KUBECONFIG}
+
+        set -x
+        helm upgrade -i \
+          -n ${namespace} \
+          --create-namespace \
+          auth-shared-secrets \
+          ./charts/vault.auth
+
+        # setup vault auth
+        api_server=$(yq -r '.clusters[0].cluster.server' ${KUBECONFIG})
+        ca_certificate_file=/tmp/ca.crt
+        yq -r '.clusters[0].cluster["certificate-authority-data"]' ${KUBECONFIG} | base64 -d > ${ca_certificate_file}
+        service_account=$(yq -r '.service_account_name' ./charts/vault.auth/values.yaml)
+        token_review_jwt=$(kubectl get secret ${service_account} -n ${namespace} -o go-template='{{`{{.data.token }}`}}' | base64 -d)
+        export VAULT_NAMESPACE=client
+        vault write auth/kubernetes/client_cluster/config \
+          kubernetes_host="${api_server}" \
+          token_reviewer_jwt="${token_review_jwt}" \
+          kubernetes_ca_cert="@${ca_certificate_file}" \
+          disable_iss_validation=true
+  auth_destroy:
+    cmds:
+      - |
+        export namespace=${TF_VAR_client_test_namespace}
+        export KUBECONFIG=${CLIENT_KUBECONFIG}
+
+        set -x
+        helm delete \
+          -n ${namespace} \
+          auth-shared-secrets
+  tests_apply:
+    cmds:
+      - |
+        export namespace=${TF_VAR_client_test_kubernetes_namespace}
+        export KUBECONFIG=${CLIENT_KUBECONFIG}
+
+        set -x
+        helm upgrade -i \
+          -n ${namespace} \
+          --create-namespace \
+          --set vault.address=${VAULT_ADDR} \
+          --set image=${IMAGE} \
+          tests \
+          ./charts/testbed
+  tests_destroy:
+    cmds:
+      - |
+        export namespace=${TF_VAR_client_test_kubernetes_namespace}
+        export KUBECONFIG=${CLIENT_KUBECONFIG}
+
+        set -x
+        helm delete \
+          -n ${namespace} \
+          tests

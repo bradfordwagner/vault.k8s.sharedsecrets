@@ -1,0 +1,44 @@
+{{- $test_name := "fail1" }}
+---
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultAuth
+metadata:
+  name: {{ $test_name }}
+spec:
+  vaultConnectionRef: {{ .Release.Name }}
+  method: kubernetes
+  mount: {{ .Values.vault.auth_path }}
+  namespace: {{ .Values.vault.namespace }}
+  allowedNamespaces:
+    - {{ .Release.Namespace }}
+  kubernetes:
+    role: {{ .Values.vault.role }}
+    serviceAccount: {{ .Values.service_account_name }}
+    audiences:
+      - vault
+---
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultStaticSecret
+metadata:
+  name: {{ $test_name }}
+spec:
+  type: kv-v2
+
+  # mount path
+  mount: kv2
+
+  # path of the secret
+  path: shared
+
+  # dest k8s secret
+  destination:
+    name: vso-{{ $test_name }}
+    create: true
+
+  hmacSecretData: false
+
+  # static secret refresh interval
+  refreshAfter: 30s
+
+  # Name of the CRD to authenticate to Vault
+  vaultAuthRef: {{ $test_name }}

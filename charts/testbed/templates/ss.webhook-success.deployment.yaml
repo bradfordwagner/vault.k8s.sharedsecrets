@@ -1,0 +1,76 @@
+# this deployment checks to see if we can access secrets using the token provided by webhook injector
+# in a second step we also check to see if we can access secrets from a different namespace using the token
+# vault_namespace=client
+# secrets through webhook:
+#   client=kv2/data/client # from client vault namespace
+#   shared=kv2/data/shared # from shared vault namespace
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ss-using-token-webhook
+  labels: {{- include "labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicas }}
+  selector:
+    labels: {{- include "selector_labels" . | nindent 6 }}
+    matchLabels: {{- include "selector_labels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        # use init container
+        vault.hashicorp.com/agent-init-first: "true"
+        vault.hashicorp.com/agent-inject: "true"
+        vault.hashicorp.com/agent-pre-populate: "true"
+        vault.hashicorp.com/agent-pre-populate-only: "true"
+        vault.hashicorp.com/agent-inject-secret-client: kv2/data/client
+        # spool the token used to fetch any annotated secrets into the in memory filesystem
+        vault.hashicorp.com/agent-inject-token: "true"
+
+        # auth config
+        vault.hashicorp.com/role: {{ .Values.vault.role }}
+        vault.hashicorp.com/auth-path: auth/{{ .Values.vault.auth_path }}
+
+        # vault config
+        vault.hashicorp.com/service: {{ .Values.vault.address | squote }}
+        vault.hashicorp.com/namespace: {{ .Values.vault.namespace }}
+        vault.hashicorp.com/tls-skip-verify: "true"
+        vault.hashicorp.com/log-level: debug
+      labels: {{- include "selector_labels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ .Values.service_account_name }}
+      containers:
+        - name: main
+          image: {{ .Values.image }}
+          imagePullPolicy: IfNotPresent
+          resources: {{ .Values.resources | toYaml | nindent 11 }}
+          command:
+            - /bin/bash
+            - -lc
+            - |
+              ls -lh /vault/secrets
+              # get the second to last line from /vault/secrets/client
+              res=$(tail -n 2 /vault/secrets/client | head -n 1)
+              if [[ $res != "data: map[sir:smokesalot]" ]]; then
+                echo "failed to read secret"
+                exit 1
+              fi
+              echo webhook success
+
+              # pull shared secrets using token
+              export VAULT_TOKEN=$(cat /vault/secrets/token)
+              export VAULT_NAMESPACE=shared
+              export VAULT_PATH=kv2/data/shared
+              export VAULT_ADDR={{ .Values.vault.address }}
+              export VAULT_SKIP_VERIFY=true
+              export VAULT_FORMAT=json
+              set -x
+              vault token lookup
+              res=$(vault kv get kv2/shared | jq -r .data.data.sir)
+              set +x
+              if [[ $res != "sharesalot" ]]; then
+                echo "failed to read shared secret"
+                exit 1
+              fi
+              echo webhook shared secret success
+              sleep 10000000

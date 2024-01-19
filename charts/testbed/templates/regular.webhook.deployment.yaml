@@ -1,0 +1,56 @@
+# this deployment checks to see if we can access secrets using a standard approach
+# vault_namespace=client
+# path=kv2/data/client
+# this will not reach across namespaces
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: regular-webhook
+  labels: {{- include "labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicas }}
+  selector:
+    labels: {{- include "selector_labels" . | nindent 6 }}
+    matchLabels: {{- include "selector_labels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        # use init container
+        vault.hashicorp.com/agent-init-first: "true"
+        vault.hashicorp.com/agent-inject: "true"
+        vault.hashicorp.com/agent-pre-populate: "true"
+        vault.hashicorp.com/agent-pre-populate-only: "true"
+        vault.hashicorp.com/agent-inject-secret-client: kv2/data/client
+        # spool the token used to fetch any annotated secrets into the in memory filesystem
+        vault.hashicorp.com/agent-inject-token: "true"
+
+        # auth config
+        vault.hashicorp.com/role: {{ .Values.vault.role }}
+        vault.hashicorp.com/auth-path: auth/{{ .Values.vault.auth_path }}
+
+        # vault config
+        vault.hashicorp.com/service: {{ .Values.vault.address | squote }}
+        vault.hashicorp.com/namespace: {{ .Values.vault.namespace }}
+        vault.hashicorp.com/tls-skip-verify: "true"
+      labels: {{- include "selector_labels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ .Values.service_account_name }}
+      containers:
+        - name: main
+          image: {{ .Values.image }}
+          imagePullPolicy: IfNotPresent
+          resources: {{ .Values.resources | toYaml | nindent 11 }}
+          command:
+            - /bin/bash
+            - -lc
+            - |
+              ls -lh /vault/secrets
+              # get the second to last line from /vault/secrets/client
+              res=$(tail -n 2 /vault/secrets/client | head -n 1)
+              if [[ $res != "data: map[sir:smokesalot]" ]]; then
+                echo "failed to read secret"
+                exit 1
+              fi
+              echo webhook success
+              sleep 10000000

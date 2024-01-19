@@ -1,0 +1,69 @@
+# Results from vault csi provider:
+---
+apiVersion: secrets-store.csi.x-k8s.io/v1
+kind: SecretProviderClass
+metadata:
+  name: ss-fail4
+spec:
+  provider: vault
+  secretObjects:
+    - secretName: csi-ss-fail4
+      type: Opaque
+      data:
+      - objectName: shared
+        key: sir
+  parameters:
+    roleName: {{ .Values.vault.role }}
+    vaultSkipTLSVerify: "true"
+    vaultAddress: {{ .Values.vault.address }}
+    vaultNamespace: "/"
+    vaultKubernetesMountPath: {{ .Values.vault.namespace }}/auth/{{ .Values.vault.auth_path }}
+    objects: |
+      - objectName: shared
+        secretPath: shared/kv2/data/shared
+        secretKey: sir
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ss-csi-fail4
+  labels: {{- include "labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicas }}
+  selector:
+    labels: {{- include "selector_labels" . | nindent 6 }}
+    matchLabels: {{- include "selector_labels" . | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "selector_labels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ .Values.service_account_name }}
+      containers:
+        - name: main
+          image: {{ .Values.image }}
+          imagePullPolicy: IfNotPresent
+          resources: {{ .Values.resources | toYaml | nindent 11 }}
+          volumeMounts:
+          - name: secrets-store-inline
+            mountPath: /mnt/csi
+            readOnly: true
+          command:
+            - /bin/bash
+            - -lc
+            - |
+              set -x
+              ls -lh /mnt/csi
+              res=$(cat /mnt/csi/regular)
+              if [ "$res" != "sharesalot" ]; then
+                echo failed to load csi secret
+                exit 1
+              fi
+              echo csi success
+              sleep 10000000
+      volumes:
+        - name: secrets-store-inline
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: ss-fail4
