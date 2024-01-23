@@ -1,0 +1,68 @@
+# this deployment checks to see if we can access secrets using the token provided by webhook injector
+# in a second step we also check to see if we can access secrets from a different namespace using the token
+# vault_namespace=client
+# secrets through webhook:
+#   shared=shared/kv2/data/shared # from shared vault namespace
+
+# results:
+# vault-agent-init 2024-01-22T21:42:36.028Z [WARN] vault.read(shared/kv2/data/shared): failed to check if shared/kv2/data/shared is KVv2, assume not: Error making API request.
+# vault-agent-init
+# vault-agent-init Namespace: client/
+# vault-agent-init URL: GET ${VAULT_ADDR}/v1/sys/internal/ui/mounts/shared/kv2/data/shared
+# vault-agent-init Code: 403. Errors:
+# vault-agent-init
+# vault-agent-init * preflight capability check returned 403, please ensure client's policies grant access to path "shared/kv2/data/shared/"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ss-webhook-fail4
+  labels: {{- include "labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicas }}
+  selector:
+    labels: {{- include "selector_labels" . | nindent 6 }}
+    matchLabels: {{- include "selector_labels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        # use init container
+        vault.hashicorp.com/agent-init-first: "true"
+        vault.hashicorp.com/agent-inject: "true"
+        vault.hashicorp.com/agent-pre-populate: "true"
+        vault.hashicorp.com/agent-pre-populate-only: "true"
+        vault.hashicorp.com/agent-inject-secret-shared: '/shared/kv2/data/shared'
+        # spool the token used to fetch any annotated secrets into the in memory filesystem
+        vault.hashicorp.com/agent-inject-token: "true"
+
+        # auth config
+        vault.hashicorp.com/role: {{ .Values.vault.role }}
+        vault.hashicorp.com/auth-path: auth/{{ .Values.vault.auth_path }}
+
+        # vault config
+        vault.hashicorp.com/service: {{ .Values.vault.address | squote }}
+        # force to shared namespace to try to get secrets from shared namespace
+        vault.hashicorp.com/namespace: {{ .Values.vault.namespace }}
+        vault.hashicorp.com/tls-skip-verify: "true"
+      labels: {{- include "selector_labels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ .Values.service_account_name }}
+      containers:
+        - name: main
+          image: {{ .Values.image }}
+          imagePullPolicy: IfNotPresent
+          resources: {{ .Values.resources | toYaml | nindent 11 }}
+          command:
+            - /bin/bash
+            - -lc
+            - |
+              ls -lh /vault/secrets
+              # get the second to last line from /vault/secrets/client
+              res=$(tail -n 2 /vault/secrets/client | head -n 1)
+              if [[ $res != "data: map[sir:smokesalot]" ]]; then
+                echo "failed to read secret"
+                exit 1
+              fi
+              echo webhook success
+
+              sleep 10000000

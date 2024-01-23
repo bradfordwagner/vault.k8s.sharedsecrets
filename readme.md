@@ -38,6 +38,8 @@ EOF
 | ss-webhook-fail1       | client                        | client=kv2/data/client,shared=kv2/data/shared | client/       | GET ${VAULT_ADDR}/v1/kv2/data/shared                                    | permission denied                                                                                                       | 
 | ss-webhook-fail2       | shared                        | shared=kv2/data/shared                        | shared/       | PUT ${VAULT_ADDR}/v1/auth/kubernetes/client_cluster/login               | permission denied                                                                                                       | 
 | ss-webhook-fail3       | client                        | shared=shared/kv2/data/shared                 | shared/       | URL: GET ${VAULT_ADDR}/v1/sys/internal/ui/mounts/shared/kv2/data/shared | preflight capability check returned 403, please ensure client's policies grant access to path "shared/kv2/data/shared/" | 
+| ss-webhook-fail4       | client                        | shared=/shared/kv2/data/shared                | shared/       | URL: GET ${VAULT_ADDR}/v1/sys/internal/ui/mounts/shared/kv2/data/shared | preflight capability check returned 403, please ensure client's policies grant access to path "shared/kv2/data/shared/" | 
+| ss-webhook-fail5       | /                             | shared=/shared/kv2/data/shared                | n/a           | vault.hashicorp.com/auth-path=/client/auth/kubernetes/client_cluster    | agent.auth.handler: authentication returned nil auth info: backoff=1s                                                   | 
 ### CSI Provider Shared Secrets
 | Deployment Name | vaultNamespace | Secret Path                                                                                  | Res Namespace | Res Url                                                    | Error/Notes                                                                                                                                        | 
 | --              | --             | --                                                                                           | --            | --                                                         | --                                                                                                                                                 | 
@@ -54,7 +56,6 @@ EOF
 | fail2             | client          | kubernetes/client_cluster             | shared/kv2   | shared | client | GET ${VAULT_ADDR}/v1/shared/kv2/data/shared                           | permission denied | 
 | fail3             | ''              | client/auth/kubernetes/client_cluster | shared/kv2   | shared | client | PUT ${VAULT_ADDR}/v1/auth/client/auth/kubernetes/client_cluster/login | permission denied | 
 - vso prepends 'auth' to the VaultAuth `mount`
-
 ## Versions Tested
 - vault: 1.13.4-ent
 - vault-csi-provider: 1.2.1
