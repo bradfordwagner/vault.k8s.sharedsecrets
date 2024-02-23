@@ -1,0 +1,49 @@
+{{- $test_name := "ss-working" }}
+---
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultAuth
+metadata:
+  name: {{ $test_name }}
+spec:
+  vaultConnectionRef: {{ .Release.Name }}
+  method: kubernetes
+  mount: {{ .Values.vault.auth_path }}
+  namespace: {{ .Values.vault.namespace }}
+  allowedNamespaces:
+    - {{ .Release.Namespace }}
+  kubernetes:
+    role: {{ .Values.vault.role }}
+    serviceAccount: {{ .Values.service_account_name }}
+    audiences:
+      - vault
+---
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultStaticSecret
+metadata:
+  name: {{ $test_name }}
+spec:
+  type: kv-v2
+
+  # mount path
+  mount: kv2
+
+  # path of the secret resolves to shared/kv2/shared
+  # this will request shared/kv2/data/shared
+  path: shared
+
+  # dest k8s secret
+  destination:
+    name: vso-{{ $test_name }}
+    create: true
+
+  # force request to fetch secret from 'shared' namespace
+  # this will override the configured VaultAuth namespace
+  namespace: shared
+
+  hmacSecretData: false
+
+  # static secret refresh interval
+  refreshAfter: 30s
+
+  # Name of the CRD to authenticate to Vault
+  vaultAuthRef: {{ $test_name }}
