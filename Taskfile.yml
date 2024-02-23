@@ -65,7 +65,7 @@ tasks:
   auth_destroy:
     cmds:
       - |
-        export namespace=${TF_VAR_client_test_namespace}
+        export namespace=${TF_VAR_client_test_kubernetes_namespace}
         export KUBECONFIG=${CLIENT_KUBECONFIG}
 
         set -x
