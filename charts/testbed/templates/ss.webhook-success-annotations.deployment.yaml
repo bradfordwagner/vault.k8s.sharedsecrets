@@ -1,0 +1,54 @@
+# this deployment checks to see if we can access secrets using the token provided by webhook injector
+# in a second step we also check to see if we can access secrets from a different namespace using the token
+# vault_namespace=client
+# secrets through webhook:
+#   client=kv2/data/client # from client vault namespace
+#   shared=kv2/data/shared # from shared vault namespace
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ss-using-annotations
+  labels: {{- include "labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicas }}
+  selector:
+    labels: {{- include "selector_labels" . | nindent 6 }}
+    matchLabels: {{- include "selector_labels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        # use init container
+        vault.hashicorp.com/agent-init-first: "true"
+        vault.hashicorp.com/agent-inject: "true"
+        vault.hashicorp.com/agent-pre-populate: "true"
+        vault.hashicorp.com/agent-pre-populate-only: "true"
+
+        # secret config
+        vault.hashicorp.com/agent-inject-secret-client: {{ .Values.vault.namespace }}/kv2/data/client
+        vault.hashicorp.com/agent-inject-secret-shared: shared/kv2/data/shared
+
+        # auth config
+        vault.hashicorp.com/role: {{ .Values.vault.role }}
+        vault.hashicorp.com/auth-path: {{ .Values.vault.namespace }}/auth/{{ .Values.vault.auth_path }}
+
+        # vault config
+        vault.hashicorp.com/service: {{ .Values.vault.address | squote }}
+        vault.hashicorp.com/tls-skip-verify: "true"
+        vault.hashicorp.com/log-level: debug
+      labels: {{- include "selector_labels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ .Values.service_account_name }}
+      containers:
+        - name: main
+          image: {{ .Values.image }}
+          imagePullPolicy: IfNotPresent
+          resources: {{ .Values.resources | toYaml | nindent 11 }}
+          command:
+            - /bin/bash
+            - -lc
+            - |
+              ls -lh /vault/secrets
+
+              echo webhook shared secret success
+              sleep 10000000
