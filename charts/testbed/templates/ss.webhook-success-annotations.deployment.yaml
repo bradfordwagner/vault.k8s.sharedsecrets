@@ -29,6 +29,7 @@ spec:
         vault.hashicorp.com/agent-inject-secret-shared: shared/kv2/data/shared
 
         # auth config
+        vault.hashicorp.com/namespace: ""
         vault.hashicorp.com/role: {{ .Values.vault.role }}
         vault.hashicorp.com/auth-path: {{ .Values.vault.namespace }}/auth/{{ .Values.vault.auth_path }}
 
@@ -48,7 +49,10 @@ spec:
             - /bin/bash
             - -lc
             - |
+              set -ex
               ls -lh /vault/secrets
+              cat /vault/secrets/client
+              cat /vault/secrets/shared
 
               echo webhook shared secret success
               sleep 10000000
