@@ -15,6 +15,11 @@ resource "vault_namespace" "namespaces" {
   path     = each.value
 }
 
+module "root" {
+  depends_on = [vault_namespace.namespaces]
+  source = "./modules/root"
+}
+
 module "client" {
   depends_on                       = [vault_namespace.namespaces]
   source                           = "./modules/client"
