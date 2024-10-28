@@ -9,6 +9,41 @@ resource "vault_auth_backend" "kubernetes_auth_endpoint" {
   }
 }
 
+################################################################
+# create kubernetes backend
+resource "vault_mount" "kubernetes_backends" {
+  namespace                 = var.vault_namespace
+  path                      = "kubernetes/client_cluster"
+  type                      = "kubernetes"
+  default_lease_ttl_seconds = 10 * 60 # 10 minutes
+  max_lease_ttl_seconds     = 30 * 24 * 60 * 60 # 30 days
+  options = {
+    disable_local_ca_jwt = true
+  }
+}
+resource "vault_kubernetes_secret_backend_role" "kauth_approle" {
+  allowed_kubernetes_namespaces = ["default"]
+  backend                       = vault_mount.kubernetes_backends.path
+  generated_role_rules          = <<EOT
+      rules:
+      - apiGroups: ["*"]
+        resources: [pods]
+        verbs: [get, list]
+EOT
+  kubernetes_role_type = "Role"
+  name = "kauth-approle"
+  provider          = vault
+  namespace         = var.vault_namespace
+  token_default_ttl = 3600 # 1 hour
+  token_max_ttl     = 28800 # 8 hours
+  # add labels to kubernetes created resources in order to identify them
+  # makes for easy cleanup if required
+  extra_labels = {
+    "managed-by" = "bw-vault"
+  }
+}
+################################################################
+
 # create a kv2 secrets engine
 resource "vault_mount" "kv2_secrets" {
   namespace = var.vault_namespace
